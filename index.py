@@ -2,9 +2,6 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import matplotlib.pyplot as plt
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
-import json
-
 
 # 1. Загрузка данных о курсе Эфира
 def load_data(ticker="ETH-USD", period="1y", interval="1d"):
@@ -20,34 +17,61 @@ def split_data(data, test_size=30):
     return train, test
 
 
-# 3. Обучение модели Хольта-Уинтерса с возможностью выбора тренда и сезонности
-def holt_winters_forecast(train, seasonal_periods=30, forecast_periods=30, trend='add', seasonal='add'):
-    model = ExponentialSmoothing(
-        train,
-        trend=trend,
-        seasonal=seasonal,
-        seasonal_periods=seasonal_periods
-    ).fit()
-
-    forecast = model.forecast(forecast_periods)
-    params = model.params
-    return forecast, params
+# 3. Инициализация уровня, тренда и сезонности
+def initialize_components(data, seasonal_periods):
+    level = np.mean(data[:seasonal_periods])
+    trend = (np.mean(data[seasonal_periods:2 * seasonal_periods]) - np.mean(data[:seasonal_periods])) / seasonal_periods
+    seasonals = [data[i] - level for i in range(seasonal_periods)]
+    return level, trend, seasonals
 
 
-# 4. Сохранение параметров модели в файл
-def save_model_params(params, filename="holt_winters_params.json"):
-    serializable_params = {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in params.items()}
+# 4. Обновление уровня, тренда и сезонности
+def holt_winters_additive(data, seasonal_periods, alpha, beta, gamma, forecast_periods):
+    # Инициализация
+    level, trend, seasonals = initialize_components(data, seasonal_periods)
 
-    with open(filename, 'w') as f:
-        json.dump(serializable_params, f, indent=4)
+    # Списки для хранения результатов
+    levels = [level]
+    trends = [trend]
+    seasonality = seasonals[:]
+    forecast = []
+
+    for i in range(len(data)):
+        if i >= seasonal_periods:
+            # Вычисляем прогноз на один шаг вперед
+            forecast.append(level + trend + seasonality[i % seasonal_periods])
+
+            # Обновляем уровень
+            last_level = level
+            level = alpha * (data[i] - seasonality[i % seasonal_periods]) + (1 - alpha) * (level + trend)
+
+            # Обновляем тренд
+            trend = beta * (level - last_level) + (1 - beta) * trend
+
+            # Обновляем сезонность
+            seasonality[i % seasonal_periods] = gamma * (data[i] - level) + (1 - gamma) * seasonality[
+                i % seasonal_periods]
+
+            # Сохраняем уровень и тренд
+            levels.append(level)
+            trends.append(trend)
+        else:
+            forecast.append(data[i])  # Используем фактические данные для первых точек
+
+    # Прогноз на будущее
+    for i in range(forecast_periods):
+        forecast.append(level + (i + 1) * trend + seasonality[(len(data) + i) % seasonal_periods])
+
+    return forecast, levels, trends, seasonality
 
 
 # 5. Построение прогноза и визуализация
-def plot_forecast(train, test, forecast):
+def plot_forecast(train, test, forecast, forecast_periods):
     plt.figure(figsize=(10, 6))
     plt.plot(train.index, train, label='Train')
     plt.plot(test.index, test, label='Test', color='orange')
-    plt.plot(test.index, forecast, label='Forecast', color='green')
+    plt.plot(test.index, forecast[-forecast_periods:], label='Forecast',
+             color='green')  # Берем последние значения прогноза
     plt.legend()
     plt.show()
 
@@ -55,14 +79,20 @@ def plot_forecast(train, test, forecast):
 def main():
     data = load_data()
     train, test = split_data(data)
-    period = 65
-    trend = 'add'
-    seasonal = 'mul'
-    forecast, params = holt_winters_forecast(train, seasonal_periods=period, trend=trend, seasonal=seasonal)
 
-    save_model_params(params)
+    seasonal_periods = 40  # Сезонность 30 дней (месяц)
+    alpha = 0.17  # Коэффициент сглаживания уровня
+    beta = 0.11  # Коэффициент сглаживания тренда
+    gamma = 0.12  # Коэффициент сглаживания сезонности
+    forecast_periods = len(test)  # Прогнозируем для тестового набора
 
-    plot_forecast(train, test, forecast)
+    # Вычисление модели Хольта-Уинтерса
+    forecast, levels, trends, seasonality = holt_winters_additive(train, seasonal_periods, alpha, beta, gamma,
+                                                                  forecast_periods)
+
+    # Построение графика
+    plot_forecast(train, test, forecast, forecast_periods)
+
 
 if __name__ == "__main__":
     main()
