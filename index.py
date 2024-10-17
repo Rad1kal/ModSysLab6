@@ -80,7 +80,7 @@ def main():
     data = load_data()
     train, test = split_data(data)
 
-    seasonal_periods = 40  # Сезонность 30 дней (месяц)
+    seasonal_periods = 40  # Сезонность дней
     alpha = 0.17  # Коэффициент сглаживания уровня
     beta = 0.11  # Коэффициент сглаживания тренда
     gamma = 0.12  # Коэффициент сглаживания сезонности

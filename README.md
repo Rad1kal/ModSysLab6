@@ -23,18 +23,9 @@
 ### Результаты
 
 Лучший вариант, полученный в итоге анализа тренировочного графика:  
-period = 65  
-seasonal = 'mul'  
+`seasonal_periods = 40`  
+`alpha = 0.17`  
+`beta = 0.11`  
+`gamma = 0.12`  
+  
 ![pic](./pic1.png)
-  
-period = 65  
-seasonal = 'add' 
-![pic](./pic2.png)
-  
-period = 90  
-seasonal = 'mul' 
-![pic](./pic3.png)
-  
-period = 30  
-seasonal = 'mul' 
-![pic](./pic4.png)
